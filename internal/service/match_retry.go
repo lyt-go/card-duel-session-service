@@ -21,13 +21,17 @@ func (r *MatchRetry) Run(id string, releaseLate <-chan struct{}) error {
 	go func() {
 		defer close(r.lateDone)
 		<-releaseLate
-		r.store.WriteCache(id, matchstate.State{Status: "running", Version: 1})
+		// 首轮回执的延迟回调：用版本守卫写入，绝不能把已到达
+		// succeeded 终态的列表覆盖回 running。
+		r.store.WriteCacheIfVersion(id, matchstate.State{Status: "running", Version: 1})
 	}()
+	// 同一对局的动作只能发生一次：重试复用同一对局键，借助 Effect
+	// 的去重表保证幂等，首轮回执失败与重试成功只记录一次动作。
 	for attempt := 1; attempt <= 2; attempt++ {
-		if err := r.effect.Apply(fmt.Sprintf("%s-%d", id, attempt)); err != nil {
+		if err := r.effect.Apply(id); err != nil {
 			continue
 		}
-		state := matchstate.State{Status: "succeeded", Version: attempt}
+		state := matchstate.State{Status: "succeeded", Version: attempt + 1}
 		r.store.WriteDetail(id, state)
 		r.store.WriteCache(id, state)
 		return nil

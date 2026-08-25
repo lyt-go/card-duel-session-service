@@ -14,6 +14,7 @@ type Store struct {
 }
 
 func NewStore() *Store { return &Store{detail: make(map[string]State), cache: make(map[string]State)} }
+func NewEffect() *Effect { return &Effect{seen: make(map[string]bool)} }
 func (s *Store) WriteDetail(id string, state State) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -23,6 +24,16 @@ func (s *Store) WriteCache(id string, state State) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cache[id] = state
+}
+
+// WriteCacheIfVersion 仅当新版本号严格更高时才写入缓存，
+// 防止迟到的首轮回调把已经到达终态（succeeded）的列表覆盖回进行中（running）。
+func (s *Store) WriteCacheIfVersion(id string, state State) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if state.Version > s.cache[id].Version {
+		s.cache[id] = state
+	}
 }
 func (s *Store) Detail(id string) State { s.mu.RLock(); defer s.mu.RUnlock(); return s.detail[id] }
 func (s *Store) Listed(id string) State { s.mu.RLock(); defer s.mu.RUnlock(); return s.cache[id] }
