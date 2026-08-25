@@ -18,4 +18,6 @@ func (c *Client) Challenge(mode string) error {
 	}
 	return nil
 }
-func normalize(err error) error { return fmt.Errorf("下游调用失败: %v", err) }
+// normalize 用 %w 包裹，保留 *RemoteError 的错误链，
+// 使调用方能通过 errors.As 识别拒绝等具体类型。
+func normalize(err error) error { return fmt.Errorf("下游调用失败: %w", err) }
